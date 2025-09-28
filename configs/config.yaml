@@ -1,0 +1,20 @@
+sources:
+  - type: url
+    value: https://www.backtrader.com/docu/
+  - type: file
+    value: ./sample_data/*.md
+  - type: pdf
+    value: ./sample_data/sample.pdf
+  - type: notion
+    value: ${NOTION_DATABASE_ID}
+  - type: s3
+    value: sample-bucket|docs/
+embedding:
+  provider: auto
+  model: text-embedding-3-small
+index:
+  type: faiss  # options: faiss | chroma | milvus
+  path: rag_index.faiss
+pipeline:
+  chunk_max_chars: 2000
+  chunk_overlap: 200
