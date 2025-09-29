@@ -1,9 +1,10 @@
 import faiss, numpy as np, json
-from core.utils import load_config
-CONF = load_config()
+from core import constants
 
 def load_index(index_path=None):
-    index_path = index_path or CONF.get('FAISS_INDEX_PATH')
+    if not index_path:
+        raise ValueError("index_path must be provided")
+    
     index = faiss.read_index(index_path)
     with open(index_path + '.meta.json', 'r', encoding='utf-8') as f:
         meta = json.load(f)

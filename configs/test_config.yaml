@@ -1,0 +1,12 @@
+sources:
+  - type: file
+    value: ./sample_data/*.md
+embedding:
+  provider: sentence-transformers
+  model: all-MiniLM-L6-v2
+index:
+  type: faiss
+  path: test_rag_index.faiss
+pipeline:
+  chunk_max_chars: 2000
+  chunk_overlap: 200

@@ -1,41 +1,59 @@
 import os, time, numpy as np
 from core.utils import load_config
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:
-    SentenceTransformer = None
-CONF = load_config()
-EMBED_MODEL = os.getenv('EMBED_MODEL', CONF.get('EMBED_MODEL'))
-USE_OPENAI = bool(CONF.get('OPENAI_API_KEY')) and EMBED_MODEL and EMBED_MODEL.startswith('text-embedding')
-if not USE_OPENAI:
-    if SentenceTransformer is None:
-        raise RuntimeError('sentence-transformers not available; install or set OPENAI_API_KEY')
-    _st_model = SentenceTransformer('all-MiniLM-L6-v2')
-else:
-    import openai
-    openai.api_key = CONF.get('OPENAI_API_KEY')
+import abc
+from core import constants
 
-def embed_texts_local(texts):
-    embs = _st_model.encode(texts, show_progress_bar=False)
-    return [e.tolist() if hasattr(e, 'tolist') else e for e in embs]
+class Embedder(abc.ABC):
+    def __init__(self, model_name):
+        self.model_name = model_name
 
-def embed_texts_openai(texts, model='text-embedding-3-small', batch=16):
-    import openai
-    embs = []
-    for i in range(0, len(texts), batch):
-        batch_texts = texts[i:i+batch]
-        resp = openai.Embedding.create(input=batch_texts, model=model)
-        for d in resp.data:
-            embs.append(d.embedding)
-        time.sleep(0.2)
-    return embs
+    @abc.abstractmethod
+    def embed(self, texts):
+        pass
 
-def embed_chunks(chunks):
-    texts = [c['text'] for c in chunks]
-    if USE_OPENAI:
-        vecs = embed_texts_openai(texts, model=EMBED_MODEL or 'text-embedding-3-small')
+    def embed_query(self, query):
+        return self.embed([query])[0]
+
+class OpenAIEmbedder(Embedder):
+    def __init__(self, model_name, api_key):
+        super().__init__(model_name)
+        from openai import OpenAI
+        self.client = OpenAI(api_key=api_key)
+
+    def embed(self, texts, batch_size=16):
+        embs = []
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i+batch_size]
+            resp = self.client.embeddings.create(input=batch_texts, model=self.model_name)
+            for d in resp.data:
+                embs.append(d.embedding)
+            time.sleep(0.2)
+        return embs
+
+class SentenceTransformerEmbedder(Embedder):
+    def __init__(self, model_name):
+        super().__init__(model_name)
+        from sentence_transformers import SentenceTransformer
+        self._st_model = SentenceTransformer(model_name)
+
+    def embed(self, texts):
+        embs = self._st_model.encode(texts, show_progress_bar=False)
+        return [e.tolist() if hasattr(e, 'tolist') else e for e in embs]
+
+def get_embedder(config):
+    provider = config.get(constants.EMBEDDING, {}).get(constants.PROVIDER, constants.PROVIDER_AUTO)
+    model_name = config.get(constants.EMBEDDING, {}).get(constants.MODEL)
+    api_key = config.get(constants.EMBEDDING, {}).get(constants.API_KEY)
+
+    if provider == constants.PROVIDER_OPENAI or (provider == constants.PROVIDER_AUTO and model_name and model_name.startswith('text-embedding')):
+        return OpenAIEmbedder(model_name or 'text-embedding-3-small', api_key)
     else:
-        vecs = embed_texts_local(texts)
+        return SentenceTransformerEmbedder(model_name or 'all-MiniLM-L6-v2')
+
+def embed_chunks(chunks, config):
+    embedder = get_embedder(config)
+    texts = [c['text'] for c in chunks]
+    vecs = embedder.embed(texts)
     for c, v in zip(chunks, vecs):
         c['embedding'] = v
     return chunks

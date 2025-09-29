@@ -1,17 +1,20 @@
-import os, json, importlib.util, glob
+import os, json, importlib.util, glob, yaml
 from dotenv import load_dotenv
 load_dotenv()
 
-def load_config():
-    return {
-        'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
-        'EMBED_MODEL': os.getenv('EMBED_MODEL','text-embedding-3-small'),
-        'CHUNK_MAX_CHARS': int(os.getenv('CHUNK_MAX_CHARS',2000)),
-        'CHUNK_OVERLAP': int(os.getenv('CHUNK_OVERLAP',200)),
-        'BASE_URL': os.getenv('BASE_URL','https://www.backtrader.com/docu/'),
-        'FAISS_INDEX_PATH': os.getenv('FAISS_INDEX_PATH','rag_index.faiss'),
-        'DOCS_JSON': os.getenv('DOCS_JSON','docs.json'),
-    }
+def load_config(config_path='configs/config.yaml'):
+    with open(config_path, 'r') as f:
+        config_str = f.read()
+    config_str = os.path.expandvars(config_str)
+    config = yaml.safe_load(config_str)
+    
+    # Override with environment variables for some keys
+    config['embedding']['api_key'] = os.getenv('OPENAI_API_KEY', config.get('embedding', {}).get('api_key'))
+    config['sources'] = [
+        {**s, 'value': os.getenv('NOTION_DATABASE_ID') if s['type'] == 'notion' else s['value']}
+        for s in config.get('sources', [])
+    ]
+    return config
 
 def save_json(path, obj):
     with open(path, 'w', encoding='utf-8') as f:
