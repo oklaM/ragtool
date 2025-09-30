@@ -1,30 +1,59 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
+"""FastAPI application for the RAG Toolkit."""
+
+from fastapi import FastAPI
 from pydantic import BaseModel
-from mcp.rag_service import RagMCPService
-from core.utils import load_config
-import os
+from mcp.rag_service import RAGService
+from core.loaders.file_loader import FileLoader
+from core.loaders.url_loader import UrlLoader
 
-app = FastAPI(title='RAG MCP API')
+import logging
 
-config = load_config('configs/test_config.yaml')
-svc = RagMCPService(config)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-MCP_API_KEY = os.getenv('MCP_API_KEY')
+app = FastAPI(title='RAG Toolkit API')
 
-def check_api_key(x_api_key: str = Header(None)):
-    if MCP_API_KEY and x_api_key != MCP_API_KEY:
-        raise HTTPException(status_code=401, detail='Invalid API Key')
-    return True
+rag_service = RAGService()
+file_loader = FileLoader()
+url_loader = UrlLoader()
 
-class SearchReq(BaseModel):
-    query: str
-    top_k: int = 5
+class IngestRequest(BaseModel):
+    """Request model for the /ingest endpoint."""
+    sources: list[str]
 
-@app.post('/mcp/search', dependencies=[Depends(check_api_key)])
-def search(req: SearchReq):
-    res = svc.search(req.query, top_k=req.top_k)
-    return {'results': res}
+class AskRequest(BaseModel):
+    """Request model for the /ask endpoint."""
+    question: str
 
-@app.get('/health')
+@app.post("/ingest")
+def ingest(request: IngestRequest):
+    """Ingests documents from a list of sources."""
+    logger.info(f"Ingesting sources: {request.sources}")
+    docs = []
+    # Simple way to distinguish between url and file path
+    urls = [source for source in request.sources if source.startswith('http')]
+    files = [source for source in request.sources if not source.startswith('http')]
+
+    if urls:
+        logger.info(f"Loading URLs: {urls}")
+        docs.extend(url_loader.load(urls))
+    if files:
+        logger.info(f"Loading files: {files}")
+        docs.extend(file_loader.load(files))
+
+    rag_service.ingest(docs)
+    logger.info(f"Ingested {len(docs)} documents.")
+    return {"status": "ok"}
+
+@app.post("/ask")
+def ask(request: AskRequest):
+    """Asks a question to the RAG toolkit."""
+    logger.info(f"Received question: {request.question}")
+    answer = rag_service.ask(request.question)
+    logger.info(f"Returning answer: {answer}")
+    return {"answer": answer}
+
+@app.get("/health")
 def health():
-    return {'status': 'ok'}
+    """Health check endpoint."""
+    return {"status": "ok"}

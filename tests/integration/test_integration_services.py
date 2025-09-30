@@ -1,18 +1,18 @@
-import os
 import pytest
+from mcp.rag_service import RAGService
+from core.utils import Document
 
-def test_minio_available():
-    endpoint = os.getenv('MINIO_ENDPOINT', 'http://localhost:9000')
-    try:
-        import httpx
-        r = httpx.get(endpoint + '/')
-        assert r.status_code in (200, 403, 404)
-    except Exception:
-        pytest.skip('MinIO not available')
+def test_rag_service_instantiation():
+    rag_service = RAGService()
+    assert rag_service is not None
 
-def test_milvus_connectable():
-    try:
-        from pymilvus import connections
-        connections.connect(host=os.getenv('MILVUS_HOST','127.0.0.1'), port=str(os.getenv('MILVUS_PORT','19530')))
-    except Exception:
-        pytest.skip('Milvus not connectable')
+def test_rag_service_e2e():
+    rag_service = RAGService()
+    docs = [
+        Document(id="doc1", content="This is a test document about cats.", source="test"),
+        Document(id="doc2", content="This is another test document about dogs.", source="test")
+    ]
+    rag_service.ingest(docs)
+    answer = rag_service.ask("What are the documents about?")
+    assert "cats" in answer.lower()
+    assert "dogs" in answer.lower()

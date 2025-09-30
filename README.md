@@ -20,12 +20,11 @@ A comprehensive, production-ready RAG (Retrieval-Augmented Generation) toolkit t
 - **S3 Storage**: Cloud storage integration
 - **OCR Capabilities**: Image text recognition
 
-## 📋 Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.8+
 - Tesseract OCR (for image processing)
-- Required API keys (OpenAI, Notion, etc.)
 
 ### Installation
 
@@ -43,36 +42,21 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-3. **Configure environment**:
-```bash
-cp .env.example .env
-# Edit .env with your API keys and settings
-```
-
-### Basic Usage
-
-1. **Configure data sources** in `configs/config.yaml`:
-```yaml
-sources:
-  - type: url
-    value: https://www.backtrader.com/docu/
-  - type: file
-    value: ./sample_data/*.md
-```
-
-2. **Run the pipeline**:
-```bash
-python scripts/run_pipeline.sh
-```
-
 3. **Start the API server**:
 ```bash
 uvicorn mcp.api:app --host 0.0.0.0 --port 8000
 ```
 
-4. **Query the system** using the example client:
+### Basic Usage
+
+1. **Ingest documents**:
 ```bash
-python examples/mcp_client.py "What is backtrader?"
+curl -X POST -H "Content-Type: application/json" -d '{"sources": ["path/to/your/file.txt"]}' http://localhost:8000/ingest
+```
+
+2. **Ask a question**:
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"question": "What is in the document?"}' http://localhost:8000/ask
 ```
 
 ## 🏗️ Architecture
@@ -171,17 +155,14 @@ index:
 ### API Integration
 
 ```python
-import httpx
+import requests
 
-# Query the RAG system
-async def search_documents(query: str, top_k: int = 5):
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://localhost:8000/mcp/search",
-            json={"query": query, "top_k": top_k},
-            headers={"x-api-key": "your_api_key"}
-        )
-        return response.json()
+# Ingest documents
+requests.post("http://localhost:8000/ingest", json={"sources": ["path/to/your/file.txt"]})
+
+# Ask a question
+response = requests.post("http://localhost:8000/ask", json={"question": "What is in the document?"})
+print(response.json()["answer"])
 ```
 
 ## 🧪 Testing

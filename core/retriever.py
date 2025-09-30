@@ -1,21 +1,27 @@
-import faiss, numpy as np, json
-from core import constants
+"""This module provides a Retriever class for retrieving documents from an index."""
 
-def load_index(index_path=None):
-    if not index_path:
-        raise ValueError("index_path must be provided")
-    
-    index = faiss.read_index(index_path)
-    with open(index_path + '.meta.json', 'r', encoding='utf-8') as f:
-        meta = json.load(f)
-    return index, meta
+from core.embedder import Embedder
+from core.indexer import Indexer
+from core.utils import Document
+import logging
 
-def retrieve_top_k(query_emb, top_k=5, index_path=None):
-    index, meta = load_index(index_path)
-    D, I = index.search(np.array([query_emb]).astype('float32'), top_k)
-    hits = []
-    for dist, idx in zip(D[0], I[0]):
-        if idx < 0: continue
-        item = meta[idx]
-        hits.append({'score': float(dist), 'meta': item})
-    return hits
+logger = logging.getLogger(__name__)
+
+class Retriever:
+    """A class for retrieving documents from an index."""
+    def __init__(self, indexer: Indexer, embedder: Embedder):
+        """Initializes the Retriever."""
+        self.indexer = indexer
+        self.embedder = embedder
+
+    def retrieve(self, query: str, top_k: int = 5) -> list[Document]:
+        """Retrieves the top_k most relevant documents for a given query."""
+        logger.info(f"Retrieving top {top_k} documents for query: {query}")
+        query_embedding = self.embedder.embed_query(query)
+        search_results = self.indexer.search(query_embedding, top_k)
+        
+        # The search method of the indexer returns a list of (document, score) tuples.
+        # We are only interested in the documents here.
+        results = [result[0] for result in search_results]
+        logger.info(f"Retrieved {len(results)} documents.")
+        return results
